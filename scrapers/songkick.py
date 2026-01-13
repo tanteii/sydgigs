@@ -4,9 +4,12 @@ from dateutil import parser
 from models.event import Event
 
 BASE_URL = "https://www.songkick.com"
-URL = "https://www.songkick.com/metro-areas/26794-australia-sydney"
+SONGKICK_URL = "https://www.songkick.com/metro-areas/26794-australia-sydney"
 
-def scrape_songkick():
+def scrape_songkick(page=1):
+
+    URL = f"{SONGKICK_URL}?page={page}#metro-area-calendar"
+
     page = requests.get(URL, timeout=10)
     soup = BeautifulSoup(page.content, "html.parser")
 
@@ -40,7 +43,7 @@ def scrape_songkick():
             date = date,
             venue = venue,
             url = link,
-            source = "songkick"
+            source = "Songkick"
         ))
 
     return parsed_events
