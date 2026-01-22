@@ -9,17 +9,25 @@ SONGKICK_URL = "https://www.songkick.com/metro-areas/26794-australia-sydney"
 def scrape_songkick(page=1):
 
     URL = f"{SONGKICK_URL}?page={page}#metro-area-calendar"
-
+    # print(URL)
     page = requests.get(URL, timeout=10)
     soup = BeautifulSoup(page.content, "html.parser")
 
-    results = soup.find(id="metro-area-calendar")
     parsed_events = []
 
-    events = results.find_all("li", class_="event-listings-element")
+    events = soup.select("li.event-listings-element")
     for event in events:
-        artist_tag = event.select_one("p.artists span")
-        artist = artist_tag.get_text(strip=True)
+        artists_tag = event.select_one("p.artists")
+        if not artists_tag:
+            continue
+
+        main_artist_tag = artists_tag.select_one("strong")
+        main_artist = main_artist_tag.get_text(strip=True) if main_artist_tag else ""
+
+        supporting_artist_tag = artists_tag.select_one("span.support")
+        supporting_artist = supporting_artist_tag.get_text(strip=True) if supporting_artist_tag else ""
+        
+        artist = f"{main_artist} (with {supporting_artist})" if supporting_artist else main_artist
 
         date_tag = event.select_one("time")
         # date = date_tag["datetime"]
