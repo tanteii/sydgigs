@@ -9,6 +9,9 @@ class Event:
     url: str
     source: str
 
+    def key(self):
+        return (self.artist, self.date, self.venue)
+
     def __str__(self):
         return (
             f"{self.artist}\n"

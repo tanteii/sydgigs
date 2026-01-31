@@ -6,14 +6,25 @@ from models.event import Event
 BASE_URL = "https://www.songkick.com"
 SONGKICK_URL = "https://www.songkick.com/metro-areas/26794-australia-sydney"
 
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
 def scrape_songkick(page=1):
 
     URL = f"{SONGKICK_URL}?page={page}#metro-area-calendar"
-    # print(URL)
-    page = requests.get(URL, timeout=10)
+    print(URL)
+    page = requests.get(URL, headers=headers, timeout=10)
     soup = BeautifulSoup(page.content, "html.parser")
 
     parsed_events = []
+
+    # print(soup)
 
     events = soup.select("li.event-listings-element")
     for event in events:
