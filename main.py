@@ -2,13 +2,15 @@
 main.py — CLI entrypoint for Sydney Gigs Scraper.
 
 Usage:
-    python main.py                        # start web UI (default)
-    python main.py --cli                  # paginated terminal output
-    python main.py --export csv           # dump all events to stdout as CSV (TBA)
+    python main.py                              # start web UI (default)
+    python main.py --cli                        # paginated terminal output
+    python main.py --export csv                 # dump all events to stdout as CSV (JSON supported)
+    python main.py --export csv -o file.csv     # dump all events to file.csv as CSV
 """
 
 import argparse
 import asyncio
+import sys
 from engine import ScrapingEngine
 
 
@@ -73,19 +75,47 @@ def main():
     parser.add_argument(
         "--export", 
         choices=["json", "csv"], 
-        help="Export all events and exit"
+        help="Export all events and exit to stdout"
     )
 
+    parser.add_argument(
+        "-o", "--output", 
+        type=str,
+        default=None,
+        help="Optional file to export data to (default: stdout)"
+    )
 
     args = parser.parse_args()
 
+    # export events to json/csv based on args
     if args.export:
+        print("Now exporting... (10 pages)")
         async def dump():
             engine = ScrapingEngine(sources=args.sources)
             await engine.fetch_all(max_pages=10)
-            events = engine.cached
+            events = engine.cache
+
+            output_target = (
+                open(args.output, "w", newline="", encoding="utf-8") 
+                if args.output else sys.stdout
+            )
+
+            if args.export == "json":
+                import json
+                json.dump([e.to_dict() for e in events], 
+                            output_target, indent=2, default=str)
+            else:
+                import csv
+                w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
+                                   "date_display", "time_display", "venue", "source", "url"])
+                w.writeheader()
+                for e in events:
+                    d = e.to_dict()
+                    w.writerow({k: d.get(k, "") for k in w.fieldnames})
+
+            if args.output:
+                output_target.close()
             
-            # export events to json/csv based on args
         asyncio.run(dump())
         return
 
