@@ -1,16 +1,60 @@
-from scrapers.songkick import scrape_songkick
+"""
+main.py — CLI entrypoint for Sydney Gigs Scraper.
+
+Usage:
+    python main.py                        # start web UI (default)
+    python main.py --cli                  # paginated terminal output
+    python main.py --export csv           # dump all events to stdout as CSV (TBA)
+"""
+
 import argparse
+import asyncio
+from engine import ScrapingEngine
 
-SCRAPERS = {
-    "songkick": scrape_songkick,
-    # "ticketek": scrape_ticketek
-}
 
-seen_events = set()
+def cli_mode(args):
+    engine = ScrapingEngine(sources=args.sources)
+    chunk = args.chunk
+    display_page = 1
+
+    async def run():
+        nonlocal display_page
+        while True:
+            print(f"\n--- Page {display_page} ---")
+            new = await engine.fetch_next()
+
+            if not new and not engine.undepleted:
+                print("No more events found.")
+                break
+
+            for i, event in enumerate(new[:chunk]):
+                print(event)
+                print()
+
+            if not engine.undepleted:
+                print("— End of results —")
+                break
+
+            user_input = input("Press [Enter] for more, or [q] to quit\n").strip().lower()
+            if user_input == "q":
+                break
+
+            display_page += 1
+
+    asyncio.run(run())
+
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Concert Scraper — async multi-source concert scraper"
+    )
     
+    parser.add_argument(
+        "--cli", 
+        action="store_true", 
+        help="Run in terminal mode instead of web UI"
+    )
+
     parser.add_argument(
         "-c", "--chunk",
         type=int,
@@ -21,68 +65,35 @@ def main():
     parser.add_argument(
         "-s", "--sources",
         nargs="+",
-        choices=SCRAPERS.keys(),
+        choices=["songkick"],
         default=["songkick"],
         help="Sources to be scraped"
     )
 
+    parser.add_argument(
+        "--export", 
+        choices=["json", "csv"], 
+        help="Export all events and exit"
+    )
+
+
     args = parser.parse_args()
 
-    scraper(event_chunk=args.chunk, sources=args.sources)
-
-# Scrape events from websites and display in a paged and normalised format
-def scraper(event_chunk=5, sources=None):
-    display_page = 1
-
-    web_page = 1
-
-    event_index = 0
-    all_events = []
-    new_events = []
-
-    scrapers = [SCRAPERS[source] for source in sources]
-
-    while True:
-        print(f"\n--- Page {display_page} ---")
-
-        # Scrape new events if none to display
-        if event_index + event_chunk > len(all_events):
-            for scrape in scrapers:
-                new_events = scrape(web_page)
-                all_events = append_events(all_events, new_events)
-                web_page += 1
-        
-        if not new_events:
-            print("No more events found")
-            break
-        
-        # Limit displayed events per page
-        end = min(event_index + event_chunk, len(all_events))
-        for i in range(event_index, end):
-            print(all_events[i])
-            print()
-        
-
-        user_input = input("Press [Enter] to load more\nor [q] to quit\n").strip().lower()
-
-        if user_input == "q":
-            print("Quitting.")
-            break
+    if args.export:
+        async def dump():
+            engine = ScrapingEngine(sources=args.sources)
+            await engine.fetch_all(max_pages=10)
+            events = engine.cached
             
-        event_index += event_chunk
-        display_page += 1
+            # export events to json/csv based on args
+        asyncio.run(dump())
+        return
 
-    return all_events
 
-# Append new events with deduplication across pages
-def append_events(events, new_events):
-    for event in new_events:
-        key = event.key()
-        if key not in seen_events:
-            seen_events.add(key)
-            events.append(event)
-
-    return events
+    if args.cli:
+        cli_mode(args)
+    # else:
+        # TBA web mode
 
 if __name__ == "__main__":
     main()
