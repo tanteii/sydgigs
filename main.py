@@ -4,6 +4,7 @@ main.py — CLI entrypoint for Sydney Gigs Scraper.
 Usage:
     python main.py                              # start web UI (default)
     python main.py --cli                        # paginated terminal output
+    python main.py --cli --artist tame          # filter by artist in CLI mode
     python main.py --export csv                 # dump all events to stdout as CSV (JSON supported)
     python main.py --export csv -o file.csv     # dump all events to file.csv as CSV
 """
@@ -11,7 +12,7 @@ Usage:
 import argparse
 import asyncio
 import sys
-from engine import ScrapingEngine
+from engine import ScrapingEngine, apply_filters
 
 
 def cli_mode(args):
@@ -22,18 +23,30 @@ def cli_mode(args):
     async def run():
         nonlocal display_page
         while True:
-            print(f"\n--- Page {display_page} ---")
             new = await engine.fetch_next()
 
-            if not new and not engine.undepleted:
-                print("No more events found.")
-                break
+            filtered = apply_filters(
+                new,
+                artist=args.artist or "",
+                venue=args.venue or "",
+                date_from=args.date_from or "",
+                date_to=args.date_to or "",
+                source=args.source or "",
+            )
 
-            for i, event in enumerate(new[:chunk]):
+            if not filtered:
+                if engine.depleted:
+                    print("No more events found.")
+                    break
+                else:
+                    continue
+        
+            print(f"\n--- Page {display_page} ---")
+            for i, event in enumerate(filtered[:chunk]):
                 print(event)
                 print()
 
-            if not engine.undepleted:
+            if engine.depleted:
                 print("— End of results —")
                 break
 
@@ -85,6 +98,13 @@ def main():
         help="Optional file to export data to (default: stdout)"
     )
 
+    # filter options
+    parser.add_argument("--artist", type=str, default="", help="Filter by artist name")
+    parser.add_argument("--venue", type=str, default="", help="Filter by venue name")
+    parser.add_argument("--date-from", dest="date_from", type=str, default="", help="Start date filter")
+    parser.add_argument("--date-to", dest="date_to", type=str, default="", help="End date filter")
+    parser.add_argument("--source", type=str, default="", help="Filter by source (songkick/ticketek)")
+
     args = parser.parse_args()
 
     # export events to json/csv based on args
@@ -93,7 +113,8 @@ def main():
         async def dump():
             engine = ScrapingEngine(sources=args.sources)
             await engine.fetch_all(max_pages=10)
-            events = engine.cache
+            events = apply_filters(engine.cached, artist=args.artist, venue=args.venue,
+                                   date_from=args.date_from, date_to=args.date_to)
 
             output_target = (
                 open(args.output, "w", newline="", encoding="utf-8") 

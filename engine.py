@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 from scrapers import SCRAPERS
 from models.event import Event
+from dateutil import parser as dateparser
 
 class ScrapingEngine:
     """
@@ -72,5 +73,51 @@ class ScrapingEngine:
         return list(self.cache)
     
     @property
-    def undepleted(self):
-        return len(self.exhausted) < len(self.sources)
+    def depleted(self):
+        return len(self.exhausted) >= len(self.sources)
+    
+    @property
+    def cached(self):
+        return list(self.cache)
+
+def apply_filters(
+    events: list[Event],
+    artist: str = "",
+    venue: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    source: str = "",
+):
+    """Filter a list of events. All filters are case-insensitive substrings."""
+
+    filtered = events
+
+    if artist:
+        q = artist.lower()
+        filtered = [
+            e for e in filtered
+            if q in e.artist.lower() or (e.supporting and q in e.supporting.lower())
+        ]
+
+    if venue:
+        q = venue.lower()
+        filtered = [e for e in filtered if q in e.venue.lower()]
+
+    if source:
+        filtered = [e for e in filtered if e.source.lower() == source.lower()]
+
+    if date_from:
+        try:
+            from_dt = dateparser.parse(date_from)
+            filtered = [e for e in filtered if e.date >= from_dt]
+        except Exception:
+            pass
+
+    if date_to:
+        try:
+            to_dt = dateparser.parse(date_to)
+            filtered = [e for e in filtered if e.date <= to_dt]
+        except Exception:
+            pass
+
+    return filtered
