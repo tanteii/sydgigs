@@ -12,6 +12,9 @@ Usage:
 import argparse
 import asyncio
 import sys
+import json
+import csv
+from server import app
 from engine import ScrapingEngine, apply_filters
 
 
@@ -58,6 +61,9 @@ def cli_mode(args):
 
     asyncio.run(run())
 
+def web_mode():
+    print("Starting Sydney Gigs web interface at http://localhost:5000")
+    app.run(debug=False, port=5000)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -122,11 +128,9 @@ def main():
             )
 
             if args.export == "json":
-                import json
                 json.dump([e.to_dict() for e in events], 
                             output_target, indent=2, default=str)
             else:
-                import csv
                 w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
                                    "date_display", "time_display", "venue", "source", "url"])
                 w.writeheader()
@@ -143,8 +147,8 @@ def main():
 
     if args.cli:
         cli_mode(args)
-    # else:
-        # TBA web mode
+    else:
+        web_mode()
 
 if __name__ == "__main__":
     main()
