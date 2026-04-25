@@ -14,13 +14,21 @@ This supports the addition of sources without modifying existing scrapers.
 **How to run.**
 Within repository directory,
 
-Usage:
-    python main.py                              # start web UI (default)
-    python main.py --cli                        # paginated terminal output
-    python main.py --cli --artist tame          # filter by artist in CLI mode (--help for more filters)
-    python main.py --export csv                 # dump all events to stdout as CSV
-    python main.py --export csv -o file.csv     # save all events to file 'file.csv'
-    python main.py --export json -o file.json   # save all events to file 'file.csv'
+**Usage**
+
+```bash
+python main.py                              # start web UI (default)
+
+python main.py --cli                        # paginated terminal output
+
+python main.py --cli --artist tame          # filter by artist in CLI mode (--help for more filters)
+
+python main.py --export csv                 # dump all events to stdout as CSV
+
+python main.py --export csv -o file.csv     # save all events to file
+
+python main.py --export json -o file.json   # save all events to file
+```
 
 **Planned improvements.**
 * Adding more concert sources
