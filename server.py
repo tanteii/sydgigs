@@ -5,7 +5,7 @@ from engine import ScrapingEngine, apply_filters
 app = Flask(__name__)
 
 # engine instance per server run, holds deduplicated cache
-engine = ScrapingEngine(sources=["songkick"])
+engine = ScrapingEngine(sources=["songkick", "ticketek"])
 
 # create event loop for asynchronous scraper calls
 def run_async(coro):
