@@ -86,8 +86,8 @@ def main():
     parser.add_argument(
         "-s", "--sources",
         nargs="+",
-        choices=["songkick"],
-        default=["songkick"],
+        choices=["songkick", "ticketek"],
+        default=["songkick", "ticketek"],
         help="Sources to be scraped"
     )
 

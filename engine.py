@@ -64,7 +64,7 @@ class ScrapingEngine:
         return events
 
     # fetch specified no. pages from all sources
-    async def fetch_all(self, max_pages: int = 5) -> list[Event]:
+    async def fetch_all(self, max_pages: int = 5):
         """Eagerly fetch up to max_pages pages from all sources."""
         for _ in range(max_pages):
             batch = await self.fetch_next()
