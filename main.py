@@ -21,40 +21,45 @@ def cli_mode(args):
     display_page = 1
 
     async def run():
-        nonlocal display_page
-        while True:
-            new = await engine.fetch_next()
+        try:
+            nonlocal display_page
+            while True:
+                new = await engine.fetch_next()
+                new.sort(key=lambda e: e.date)
 
-            filtered = apply_filters(
-                new,
-                artist=args.artist or "",
-                venue=args.venue or "",
-                date_from=args.date_from or "",
-                date_to=args.date_to or "",
-                source=args.source or "",
-            )
+                filtered = apply_filters(
+                    new,
+                    artist=args.artist or "",
+                    venue=args.venue or "",
+                    date_from=args.date_from or "",
+                    date_to=args.date_to or "",
+                    source=args.source or "",
+                )
 
-            if not filtered:
+                if not filtered:
+                    if engine.depleted:
+                        print("No more events found.")
+                        break
+                    else:
+                        continue
+            
+                print(f"\n--- Page {display_page} ---")
+                for i, event in enumerate(filtered[:chunk]):
+                    print(event)
+                    print()
+
                 if engine.depleted:
-                    print("No more events found.")
+                    print("— End of results —")
                     break
-                else:
-                    continue
+
+                user_input = input("Press [Enter] for more, or [q] to quit\n").strip().lower()
+                if user_input == "q":
+                    break
+
+                display_page += 1
         
-            print(f"\n--- Page {display_page} ---")
-            for i, event in enumerate(filtered[:chunk]):
-                print(event)
-                print()
-
-            if engine.depleted:
-                print("— End of results —")
-                break
-
-            user_input = input("Press [Enter] for more, or [q] to quit\n").strip().lower()
-            if user_input == "q":
-                break
-
-            display_page += 1
+        finally:
+            await engine.close()
 
     asyncio.run(run())
 
@@ -112,30 +117,34 @@ def main():
         print("Now exporting... (10 pages)")
         async def dump():
             engine = ScrapingEngine(sources=args.sources)
-            await engine.fetch_all(max_pages=10)
-            events = apply_filters(engine.cached, artist=args.artist, venue=args.venue,
-                                   date_from=args.date_from, date_to=args.date_to)
+            try:
+                await engine.fetch_all(max_pages=10)
+                events = apply_filters(engine.cached, artist=args.artist, venue=args.venue,
+                                    date_from=args.date_from, date_to=args.date_to)
+                events.sort(key=lambda e: e.date)
 
-            output_target = (
-                open(args.output, "w", newline="", encoding="utf-8") 
-                if args.output else sys.stdout
-            )
+                output_target = (
+                    open(args.output, "w", newline="", encoding="utf-8") 
+                    if args.output else sys.stdout
+                )
 
-            if args.export == "json":
-                import json
-                json.dump([e.to_dict() for e in events], 
-                            output_target, indent=2, default=str)
-            else:
-                import csv
-                w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
-                                   "date_display", "time_display", "venue", "source", "url"])
-                w.writeheader()
-                for e in events:
-                    d = e.to_dict()
-                    w.writerow({k: d.get(k, "") for k in w.fieldnames})
+                if args.export == "json":
+                    import json
+                    json.dump([e.to_dict() for e in events], 
+                                output_target, indent=2, default=str)
+                else:
+                    import csv
+                    w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
+                                    "date_display", "time_display", "venue", "source", "url"])
+                    w.writeheader()
+                    for e in events:
+                        d = e.to_dict()
+                        w.writerow({k: d.get(k, "") for k in w.fieldnames})
 
-            if args.output:
-                output_target.close()
+                if args.output:
+                    output_target.close()
+            finally:
+                await engine.close()
             
         asyncio.run(dump())
         return

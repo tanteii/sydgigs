@@ -2,25 +2,69 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Browser, Page
 from bs4 import BeautifulSoup
 from models.event import Event
 
 BASE_URL = "https://www.bandsintown.com/c/sydney-australia/choose-dates/genre/all-genres"
 SOURCE_NAME = "Bandsintown"
+DAYS_PER_PAGE = 1
 
 
-def build_url(date: datetime) -> str:
-    day_start = date.strftime("%Y-%m-%dT00:00:00")
-    day_end = date.strftime("%Y-%m-%dT23:00:00")
-    return (
-        f"{BASE_URL}?calendarTrigger=false"
-        f"&date={day_start}%2C{day_end}"
-    )
+# def build_url(date_from, date_to):
+#     start = date_from.strftime("%Y-%m-%dT00:00:00")
+#     end = date_to.strftime("%Y-%m-%dT23:00:00")
+#     return f"{BASE_URL}?calendarTrigger=false&date={start}%2C{end}"
 
+# convert page no. to date window (interface consistency)
+def page_to_window(page_num: int):
+    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    offset = (page_num - 1) * DAYS_PER_PAGE
 
-async def scrape_day(page, date: datetime) -> list[Event]:
-    url = build_url(date)
+    current = now + timedelta(days=offset)
+    end = current + timedelta(days=DAYS_PER_PAGE - 1)
+
+    while current <= end:
+        yield current
+        current += timedelta(days=1)
+
+# persistent browser state
+playwright = None
+browser: Browser | None = None
+page: Page | None = None
+
+async def get_page():
+    global playwright, browser, page
+    if page is None:
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            locale="en-AU",
+            timezone_id="Australia/Sydney",
+        )
+        page = await context.new_page()
+
+    return page
+
+async def close_browser():
+    global playwright, browser, page
+    if browser:
+        await browser.close()
+        browser = None
+        page = None
+    if playwright:
+        await playwright.stop()
+        playwright = None
+
+async def scrape_window(page, date):
+    start = date.strftime("%Y-%m-%dT00:00:00")
+    end = date.strftime("%Y-%m-%dT23:59:59")
+    url = f"{BASE_URL}?calendarTrigger=false&date={start}%2C{end}"
     try:
         await page.goto(url, timeout=20000, wait_until="domcontentloaded")
         await page.wait_for_selector("a[href*='/e/']", timeout=10000)
@@ -55,6 +99,7 @@ def parse_card(card, date) -> Event | None:
     # venue/date text in leaf <div> elements
     text_divs = [d.get_text(strip=True) for d in card.select("div")
                  if d.get_text(strip=True) and not d.find("div")]
+    
     # example text_divs: [artist, venue, date]
     artist = text_divs[0] if text_divs else None
     venue = text_divs[1] if len(text_divs) > 1 else "TBA"
@@ -70,11 +115,6 @@ def parse_card(card, date) -> Event | None:
     # URL
     url = card["href"]
 
-    print(artist)
-    print(event_date)
-    print(venue)
-    print(url)
-
     return Event(
         artist=artist,
         date=event_date,
@@ -85,37 +125,25 @@ def parse_card(card, date) -> Event | None:
 
 
 async def scrape_bandsintown(
-    session,                        # unused (kept for interface consistency)
-    page_num: int = 1,              # unused (date-based pagination)
-    date_from: datetime | None = None,
-    date_to:   datetime | None = None,
+    session, # unused (kept for interface consistency)
+    page_num: int = 1,
 ):
-    now = datetime.now(timezone.utc)
-    search_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    search_date += timedelta(days=page_num)
+    """
+    page_num corresponds to a set date window
+    Browser kept alive over calls for efficiency
+    """
+    dates = list(page_to_window(page_num))
+    print(f"[bandsintown] Scraping {len(dates)} days ({dates[0]} -> {dates[-1]})")
+
+    page = await get_page()
 
     all_events = []
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            locale="en-AU",
-            timezone_id="Australia/Sydney",
-        )
-        page = await context.new_page()
-
-        print(f"[bandsintown] Scraping days ({search_date})")
-
-        day_events = await scrape_day(page, search_date)
-        print(f"[bandsintown] {search_date} events")
-        all_events.extend(day_events)
+    # scrape by individual dates
+    # site requires authentication for extended concert viewing
+    for date in dates:
+        events = await scrape_window(page, date)
+        all_events.extend(events)
         await asyncio.sleep(0.5)
-
-        await browser.close()
 
     return all_events

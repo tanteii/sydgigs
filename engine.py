@@ -3,12 +3,13 @@ import aiohttp
 from scrapers import SCRAPERS
 from models.event import Event
 from dateutil import parser as dateparser
+from scrapers import bandsintown
 
 class ScrapingEngine:
     """
     Async multi-source scraping engine.
 
-    Fetches pages from multiple sources concurrently using asyncio + aiohttp,
+    Fetches pages from multiple sources concurrently using asyncio + aiohttp or Playwright,
     normalises results into Event objects, and deduplicates across sources.
     """
 
@@ -72,6 +73,10 @@ class ScrapingEngine:
                 break
         return list(self.cache)
     
+    # close persistent Playwright browsers
+    async def close(self):
+        await bandsintown.close_browser()
+
     @property
     def depleted(self):
         return len(self.exhausted) >= len(self.sources)
