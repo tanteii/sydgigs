@@ -16,37 +16,25 @@ from engine import ScrapingEngine, apply_filters
 
 
 def cli_mode(args):
-    engine = ScrapingEngine(sources=args.sources)
     chunk = args.chunk
-    display_page = 1
+    filters = to_filters(args)
+    engine = ScrapingEngine(sources=args.sources, chunk=chunk)
 
     async def run():
         try:
-            nonlocal display_page
-            while True:
-                new = await engine.fetch_next()
-                new.sort(key=lambda e: e.date)
-
-                filtered = apply_filters(
-                    new,
-                    artist=args.artist or "",
-                    venue=args.venue or "",
-                    date_from=args.date_from or "",
-                    date_to=args.date_to or "",
-                    source=args.source or "",
-                )
-
-                if not filtered:
-                    if engine.depleted:
+            display_page = 1
+            # new.sort(key=lambda e: e.date)
+            async for filtered in engine.fetch_filtered(filters=filters):
+                if not filtered and engine.depleted:
                         print("No more events found.")
                         break
-                    else:
-                        continue
-            
+        
                 print(f"\n--- Page {display_page} ---")
-                for i, event in enumerate(filtered[:chunk]):
+                for event in filtered:
                     print(event)
                     print()
+
+                display_page += 1
 
                 if engine.depleted:
                     print("— End of results —")
@@ -56,12 +44,19 @@ def cli_mode(args):
                 if user_input == "q":
                     break
 
-                display_page += 1
-        
         finally:
             await engine.close()
 
     asyncio.run(run())
+
+def to_filters(args):
+    return {
+        'artist': args.artist,
+        'venue': args.venue,
+        'date_from': args.date_from,
+        'date_to': args.date_to,
+        'source': args.source
+    }
 
 
 def main():
@@ -119,8 +114,7 @@ def main():
             engine = ScrapingEngine(sources=args.sources)
             try:
                 await engine.fetch_all(max_pages=10)
-                events = apply_filters(engine.cached, artist=args.artist, venue=args.venue,
-                                    date_from=args.date_from, date_to=args.date_to)
+                events = apply_filters(engine.cached, to_filters(args))
                 events.sort(key=lambda e: e.date)
 
                 output_target = (
