@@ -1,4 +1,4 @@
-# Concert Scraper
+# SydGigs - Concert Scraper
 This project enables viewing, searching and filtering of normalised live music events happening in Sydney by scraping public event websites and normalising data into a consistent format.
 
 Live concert information are never limited to singular platforms/venues, making it difficult to completely view all upcoming events in one place, particularly for less mainstream or non-English performers. 
