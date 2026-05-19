@@ -5,6 +5,11 @@ from models.event import Event
 from dateutil import parser as dateparser
 from scrapers import bandsintown
 
+SOURCE_CONFIG = {
+    "bandsintown": {"days_per_page": 2},
+    "songkick": {"days_per_page": 6},
+}
+
 class ScrapingEngine:
     """
     Async multi-source scraping engine.
@@ -27,12 +32,14 @@ class ScrapingEngine:
         self.page = 1
         self.exhausted.clear()
 
-    async def fetch_page(self, page):
+    async def fetch_page(self, page, sources=None):
         """
-        Concurrently fetch one page from all active sources.
+        Concurrently fetch one page from all given sources (all sources by default).
         """
+        if not sources:
+            sources = self.sources
         
-        active = [s for s in self.sources if s not in self.exhausted]
+        active = [s for s in sources if s not in self.exhausted]
         if not active:
             return []
 
@@ -87,12 +94,25 @@ class ScrapingEngine:
             filtered = apply_filters(self.cache, filters)
             slice = filtered[index:index+self.chunk]
 
+            # check lagging sources
+            missing = check_common_dates(self.cache, self.sources)
             # scrape until enough entries for page or sources exhausted
-            while len(slice) < self.chunk and not self.depleted:
-                await self.fetch_page(self.page)
+            while (len(slice) < self.chunk or missing) and not self.depleted:
+                # scrape sources with missing/lagging dates for catchup
+                # (ensure consistent, interleaved sources in output)
+                if missing:
+                    await self.fetch_page(self.page, missing)
+                else:
+                    await self.fetch_page(self.page, self.sources)
+
                 self.page += 1
                 filtered = apply_filters(self.cache, filters)
+                filtered.sort(key=lambda e: e.date)
                 slice = filtered[index:index+self.chunk]
+
+                # recompute missing post-fetch
+                missing = check_common_dates(self.cache, self.sources)
+
 
             # no more entries
             if not slice:
@@ -116,6 +136,45 @@ class ScrapingEngine:
     @property
     def cached(self):
         return list(self.cache)
+    
+# ensure same dates have been scraped for all sources (due to page display mismatch)
+# returns sources with missing events
+def check_common_dates(cache, sources):
+    if not cache:
+        return []
+    
+    # latest date per source
+    latest_per_src = {}
+    for event in cache:
+        src = event.source.lower()
+        date = event.date.date()
+        if src not in latest_per_src or date > latest_per_src[src]:
+            latest_per_src[src] = date
+
+    if not latest_per_src:
+        return []
+    
+    # latest date scraped amongst all sources
+    latest = max(latest_per_src.values())
+
+    missing = []
+    for source in sources:
+        s = source.lower()
+
+        # events do not exist for source -> scrape
+        if s not in latest_per_src:
+            missing.append(s)
+            continue
+        
+        # events lag behind by a page -> scrape
+        src_config = SOURCE_CONFIG.get(s, {"days_per_page": 0})
+        lag = (latest - latest_per_src[s]).days
+
+        if lag > src_config["days_per_page"]:
+            missing.append(s)
+
+    return missing
+
 
 def apply_filters(
     events: list[Event],
