@@ -4,29 +4,18 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from playwright.async_api import async_playwright, Browser, Page
 from bs4 import BeautifulSoup
+from dateutil import parser as dateparser
 from models.event import Event
 
 BASE_URL = "https://www.bandsintown.com/c/sydney-australia/choose-dates/genre/all-genres"
 SOURCE_NAME = "Bandsintown"
-DAYS_PER_PAGE = 1
+DAYS_PER_PAGE = 2
 
 
 # def build_url(date_from, date_to):
 #     start = date_from.strftime("%Y-%m-%dT00:00:00")
 #     end = date_to.strftime("%Y-%m-%dT23:00:00")
 #     return f"{BASE_URL}?calendarTrigger=false&date={start}%2C{end}"
-
-# convert page no. to date window (interface consistency)
-def page_to_window(page_num: int):
-    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    offset = (page_num - 1) * DAYS_PER_PAGE
-
-    current = now + timedelta(days=offset)
-    end = current + timedelta(days=DAYS_PER_PAGE - 1)
-
-    while current <= end:
-        yield current
-        current += timedelta(days=1)
 
 # persistent browser state
 playwright = None
@@ -61,10 +50,11 @@ async def close_browser():
         await playwright.stop()
         playwright = None
 
-async def scrape_window(page, date):
-    start = date.strftime("%Y-%m-%dT00:00:00")
-    end = date.strftime("%Y-%m-%dT23:59:59")
-    url = f"{BASE_URL}?calendarTrigger=false&date={start}%2C{end}"
+async def scrape_window(page, start, end):
+    start_date = start.strftime("%Y-%m-%dT00:00:00")
+    end_date = end.strftime("%Y-%m-%dT23:59:59")
+
+    url = f"{BASE_URL}?calendarTrigger=false&date={start_date}%2C{end_date}"
     try:
         await page.goto(url, timeout=20000, wait_until="domcontentloaded")
         await page.wait_for_selector("a[href*='/e/']", timeout=10000)
@@ -80,7 +70,7 @@ async def scrape_window(page, date):
     # card = <a href="/e/...">
     for card in soup.select("a[href*='/e/']"):
         try:
-            event = parse_card(card, date)
+            event = parse_card(card, start)
             if event:
                 events.append(event)
         except Exception:
@@ -107,9 +97,10 @@ def parse_card(card, date) -> Event | None:
 
     # parse date + year from query
     try:
-        from dateutil import parser as dp
-        event_date = dp.parse(f"{raw_date} {date.year}")
-    except Exception:
+        event_date = dateparser.parse(
+            f"{raw_date.replace(' - ', ' ')} {date.year}"
+        )
+    except Exception as e:
         event_date = date
 
     # URL
@@ -132,18 +123,32 @@ async def scrape_bandsintown(
     page_num corresponds to a set date window
     Browser kept alive over calls for efficiency
     """
-    dates = list(page_to_window(page_num))
-    print(f"[bandsintown] Scraping {len(dates)} days ({dates[0]} -> {dates[-1]})")
+    start, end = page_to_window(page_num)
+    print(f"[bandsintown] Scraping {DAYS_PER_PAGE} days ({start} -> {end})")
 
     page = await get_page()
 
     all_events = []
 
     # scrape by individual dates
-    # site requires authentication for extended concert viewing
-    for date in dates:
-        events = await scrape_window(page, date)
-        all_events.extend(events)
-        await asyncio.sleep(0.5)
+    # (since site requires authentication for extended concert viewing)
+    events = await scrape_window(page, start, end)
+    all_events.extend(events)
+    await asyncio.sleep(0.5)
 
     return all_events
+
+
+# convert page no. to date window (interface consistency)
+def page_to_window(page_num: int):
+    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    offset = (page_num - 1) * DAYS_PER_PAGE
+
+    current = now + timedelta(days=offset)
+    end = current + timedelta(days=DAYS_PER_PAGE - 1)
+
+    return current, end
+
+    # while current <= end:
+    #     yield current
+    #     current += timedelta(days=1)

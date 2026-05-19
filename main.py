@@ -23,13 +23,13 @@ def cli_mode(args):
     async def run():
         try:
             display_page = 1
-            # new.sort(key=lambda e: e.date)
             async for filtered in engine.fetch_filtered(filters=filters):
                 if not filtered and engine.depleted:
                         print("No more events found.")
                         break
         
                 print(f"\n--- Page {display_page} ---")
+                # filtered.sort(key=lambda e: e.date)
                 for event in filtered:
                     print(event)
                     print()
