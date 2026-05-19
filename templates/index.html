@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Sydney Concerts</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #e8ff47;
+        }
+
+        .filters {
+            margin-bottom: 15px;
+        }
+
+        input, select {
+            padding: 6px;
+            margin-right: 5px;
+        }
+
+        .event {
+            border: 1px solid #333;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #1a1a1a;
+        }
+
+        .artist {
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .source {
+            margin-top: 5px;
+            color: #e8ff47;
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .source:hover {
+            text-decoration: underline;
+        }
+
+        .meta {
+        font-size: 14px;
+        color: #aaa;
+        }
+
+        button {
+        padding: 6px 10px;
+        cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Sydney Gigs</h1>
+
+<div class="filters">
+    <input id="artist" placeholder="Artist">
+    <input id="venue" placeholder="Venue">
+    <select id="source">
+        <option value="">All sources</option>
+        <option value="Songkick">Songkick</option>
+        <option value="Ticketek">Ticketek</option>
+    </select>
+    <button onclick="loadEvents()">Search</button>
+</div>
+
+<div id="events"></div>
+
+<script>
+async function loadEvents() {
+    // append input args to URL
+    const params = new URLSearchParams();
+
+    const artist = document.getElementById("artist").value;
+    const venue = document.getElementById("venue").value;
+    const source = document.getElementById("source").value;
+
+    if (artist) params.append("artist", artist);
+    if (venue) params.append("venue", venue);
+    if (source) params.append("source", source);
+
+    const res = await fetch("/api/events?" + params.toString());
+    const data = await res.json();
+
+    const container = document.getElementById("events");
+    container.innerHTML = "";
+
+    if (!data.events.length) {
+        container.innerHTML = "<p>No events found</p>";
+        return;
+    }
+
+    // clear and rebuild events list
+    let html = "";
+    for (const ev of data.events) {
+        html += `
+            <div class="event">
+                <div class="artist">${ev.artist}</div>
+                <div>${ev.venue}</div>
+                <div class="meta">
+                    ${ev.date_display} ${ev.time_display || ""}
+                </div>
+
+                <a class="source" href="${ev.url}" target="_blank">
+                Source ↗
+                </a>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
