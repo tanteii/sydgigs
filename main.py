@@ -1,5 +1,5 @@
 """
-main.py — CLI entrypoint for Sydney Gigs Scraper.
+main.py — CLI entrypoint for SydGigs Scraper.
 
 Usage:
     python main.py                              # start web UI (default)
