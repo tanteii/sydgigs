@@ -124,6 +124,7 @@ def main():
                 events = apply_filters(engine.cached, to_filters(args))
                 events.sort(key=lambda e: e.date)
 
+
                 output_target = (
                     open(args.output, "w", newline="", encoding="utf-8") 
                     if args.output else sys.stdout
