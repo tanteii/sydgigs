@@ -5,7 +5,7 @@ from engine import ScrapingEngine, apply_filters
 app = Flask(__name__)
 
 # engine instance per server run, holds deduplicated cache
-engine = ScrapingEngine(sources=["songkick"])
+engine = ScrapingEngine(sources=["songkick", "bandsintown"])
 
 # create event loop for asynchronous scraper calls
 def run_async(coro):
@@ -33,14 +33,15 @@ def get_events():
         run_async(engine.fetch_next())
 
     # apply filters to the full in-memory cache
-    events = apply_filters(
-        engine.cached,
-        artist=request.args.get("artist", ""),
-        venue=request.args.get("venue", ""),
-        date_from=request.args.get("date_from", ""),
-        date_to=request.args.get("date_to", ""),
-        source=request.args.get("source", ""),
-    )
+    filters = {
+        "artist": request.args.get("artist", ""),
+        "venue": request.args.get("venue", ""),
+        "date_from": request.args.get("date_from", ""),
+        "date_to": request.args.get("date_to", ""),
+        "source": request.args.get("source", ""),
+    }
+
+    events = apply_filters(engine.cached, filters)
 
     return jsonify({
         "events": [e.to_dict() for e in events],

@@ -1,5 +1,5 @@
 """
-main.py — CLI entrypoint for Sydney Gigs Scraper.
+main.py — CLI entrypoint for SydGigs Scraper.
 
 Usage:
     python main.py                              # start web UI (default)
@@ -129,16 +129,16 @@ def main():
                     if args.output else sys.stdout
                 )
 
-            if args.export == "json":
-                json.dump([e.to_dict() for e in events], 
-                            output_target, indent=2, default=str)
-            else:
-                w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
-                                   "date_display", "time_display", "venue", "source", "url"])
-                w.writeheader()
-                for e in events:
-                    d = e.to_dict()
-                    w.writerow({k: d.get(k, "") for k in w.fieldnames})
+                if args.export == "json":
+                    json.dump([e.to_dict() for e in events], 
+                                output_target, indent=2, default=str)
+                else:
+                    w = csv.DictWriter(output_target, fieldnames=["artist", "supporting",
+                                    "date_display", "time_display", "venue", "source", "url"])
+                    w.writeheader()
+                    for e in events:
+                        d = e.to_dict()
+                        w.writerow({k: d.get(k, "") for k in w.fieldnames})
 
                 if args.output:
                     output_target.close()
